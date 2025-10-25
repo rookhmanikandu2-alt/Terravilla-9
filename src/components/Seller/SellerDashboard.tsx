@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Upload, Plus, FileText, CheckCircle, Clock, XCircle, Image, Shield, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { mockPlots } from '../../data/mockData';
-import { DocumentType } from '../../types';
+import { DocumentType, Plot } from '../../types';
 import { formatPriceDisplay, parseLakhsToRupees } from '../../utils/priceFormatters';
 import ListingFeePayment from '../Payment/ListingFeePayment';
+import { supabase } from '../../lib/supabase';
 
 interface DocumentUpload {
   type: DocumentType;
@@ -41,7 +42,33 @@ export default function SellerDashboard() {
     { type: 'encumbrance_certificate', file: null },
   ]);
 
-  const userPlots = mockPlots.filter(plot => plot.seller_id === user?.id);
+  const [userPlots, setUserPlots] = useState<Plot[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadUserPlots();
+  }, [user?.id]);
+
+  const loadUserPlots = async () => {
+    if (!user?.id) return;
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('plots')
+        .select('*')
+        .eq('seller_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setUserPlots(data || []);
+    } catch (error) {
+      console.error('Error loading plots:', error);
+      setUserPlots(mockPlots.filter(plot => plot.seller_id === user?.id));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -94,7 +121,7 @@ export default function SellerDashboard() {
     setCurrentStep(prev => prev + 1);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (plotImages.length === 0) {
@@ -108,39 +135,95 @@ export default function SellerDashboard() {
       return;
     }
 
-    setPendingPlotId('temp-' + Date.now());
-    setShowForm(false);
-    setShowPayment(true);
+    try {
+      const areaInSqft = parseInt(formData.area_sqft);
+      const priceInLakhs = parseFloat(formData.price);
+      const priceInRupees = parseLakhsToRupees(priceInLakhs);
+      const pricePerSqft = Math.round(priceInRupees / areaInSqft);
+
+      const { data: newPlot, error } = await supabase
+        .from('plots')
+        .insert({
+          seller_id: user?.id,
+          owner_name: formData.owner_name,
+          owner_aadhaar: formData.owner_aadhaar,
+          property_owner_name: formData.property_owner_name,
+          owner_verified: formData.owner_name.toLowerCase().trim() === formData.property_owner_name.toLowerCase().trim(),
+          title: formData.title,
+          description: formData.description,
+          location_address: formData.location_address,
+          city: formData.city,
+          state: formData.state,
+          length_ft: parseFloat(formData.length_ft),
+          width_ft: parseFloat(formData.width_ft),
+          area_sqft: areaInSqft,
+          price: priceInRupees,
+          price_per_sqft: pricePerSqft,
+          status: 'draft',
+          verification_status: 'pending',
+          images: imagePreviews,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setPendingPlotId(newPlot.id);
+      setShowForm(false);
+      setShowPayment(true);
+    } catch (error) {
+      console.error('Error creating plot:', error);
+      alert('Failed to create listing. Please try again.');
+    }
   };
 
-  const handlePaymentComplete = (newPlotId: string) => {
-    setShowPayment(false);
-    setPendingPlotId(null);
-    setCurrentStep(1);
-    setFormData({
-      title: '',
-      description: '',
-      location_address: '',
-      city: '',
-      state: '',
-      length_ft: '',
-      width_ft: '',
-      area_sqft: '',
-      price: '',
-      owner_name: '',
-      owner_aadhaar: '',
-      property_owner_name: '',
-    });
-    setPlotImages([]);
-    setImagePreviews([]);
-    setDocuments([
-      { type: 'title_deed', file: null },
-      { type: 'survey_map', file: null },
-      { type: 'tax_receipt', file: null },
-      { type: 'encumbrance_certificate', file: null },
-    ]);
+  const handlePaymentComplete = async (plotId: string) => {
+    try {
+      const { error } = await supabase
+        .from('plots')
+        .update({
+          status: 'verified',
+          verification_status: 'verified'
+        })
+        .eq('id', plotId);
 
-    window.location.href = `/search?plotId=${newPlotId}`;
+      if (error) throw error;
+
+      await loadUserPlots();
+
+      setShowPayment(false);
+      setPendingPlotId(null);
+      setCurrentStep(1);
+      setFormData({
+        title: '',
+        description: '',
+        location_address: '',
+        city: '',
+        state: '',
+        length_ft: '',
+        width_ft: '',
+        area_sqft: '',
+        price: '',
+        owner_name: '',
+        owner_aadhaar: '',
+        property_owner_name: '',
+      });
+      setPlotImages([]);
+      setImagePreviews([]);
+      setDocuments([
+        { type: 'title_deed', file: null },
+        { type: 'survey_map', file: null },
+        { type: 'tax_receipt', file: null },
+        { type: 'encumbrance_certificate', file: null },
+      ]);
+
+      setTimeout(() => {
+        window.location.href = '/search';
+      }, 500);
+    } catch (error) {
+      console.error('Error completing payment:', error);
+      alert('Failed to publish listing. Please contact support.');
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -650,7 +733,12 @@ export default function SellerDashboard() {
             <h2 className="font-semibold text-slate-900">My Listings ({userPlots.length})</h2>
           </div>
 
-          {userPlots.length === 0 ? (
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+              <p className="text-slate-600">Loading your listings...</p>
+            </div>
+          ) : userPlots.length === 0 ? (
             <div className="p-12 text-center">
               <div className="bg-slate-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Plus className="w-10 h-10 text-slate-400" />
@@ -695,7 +783,9 @@ export default function SellerDashboard() {
                         <span className="font-semibold text-slate-900">
                           {formatPriceDisplay(plot.price)}
                         </span>
-                        <span>₹{plot.price_per_sqft.toLocaleString('en-IN')}/sq ft</span>
+                        {plot.price_per_sqft && (
+                          <span>₹{plot.price_per_sqft.toLocaleString('en-IN')}/sq ft</span>
+                        )}
                       </div>
                     </div>
                   </div>
