@@ -169,7 +169,13 @@ export default function SearchPage() {
                   <span className="line-clamp-1">{plot.location_address}, {plot.city}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-4 pb-4 border-b border-slate-100">
+                <div className="space-y-2 mb-4 pb-4 border-b border-slate-100">
+                  {plot.length_ft && plot.width_ft && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <Ruler className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-700">{plot.length_ft} × {plot.width_ft} ft</span>
+                    </div>
+                  )}
                   <div className="flex items-center space-x-2 text-sm">
                     <Ruler className="w-4 h-4 text-slate-400" />
                     <span className="text-slate-700">{plot.area_sqft.toLocaleString('en-IN')} sq ft</span>
