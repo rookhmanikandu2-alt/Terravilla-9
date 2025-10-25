@@ -32,6 +32,8 @@ export interface Plot {
   state: string;
   latitude?: number;
   longitude?: number;
+  length_ft?: number;
+  width_ft?: number;
   area_sqft: number;
   price: number;
   price_per_sqft: number;

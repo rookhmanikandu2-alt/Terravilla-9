@@ -3,7 +3,7 @@ import { CreditCard, CheckCircle, AlertCircle, Shield } from 'lucide-react';
 
 interface ListingFeePaymentProps {
   plotId: string;
-  onPaymentComplete: () => void;
+  onPaymentComplete: (plotId: string) => void;
   onCancel: () => void;
 }
 
@@ -17,7 +17,7 @@ export default function ListingFeePayment({ plotId, onPaymentComplete, onCancel 
     setTimeout(() => {
       setPaymentStatus('success');
       setTimeout(() => {
-        onPaymentComplete();
+        onPaymentComplete(plotId);
       }, 2000);
     }, 2000);
   };

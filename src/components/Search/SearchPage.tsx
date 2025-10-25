@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, MapPin, Ruler, IndianRupee, Filter, ChevronDown, Phone, Heart, Shield } from 'lucide-react';
 import { mockPlots } from '../../data/mockData';
 import { Plot } from '../../types';
@@ -12,6 +12,17 @@ export default function SearchPage() {
   const [maxPrice, setMaxPrice] = useState('');
   const [selectedPlot, setSelectedPlot] = useState<Plot | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const plotId = params.get('plotId');
+    if (plotId) {
+      const plot = mockPlots.find(p => p.id === plotId);
+      if (plot) {
+        setSelectedPlot(plot);
+      }
+    }
+  }, []);
 
   const cities = Array.from(new Set(mockPlots.map(p => p.city)));
   const states = Array.from(new Set(mockPlots.map(p => p.state)));
@@ -253,8 +264,15 @@ export default function SearchPage() {
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="bg-slate-50 rounded-xl p-4 text-center">
                   <Ruler className="w-6 h-6 text-slate-600 mx-auto mb-2" />
-                  <div className="text-sm text-slate-600">Area</div>
-                  <div className="font-bold text-slate-900">{selectedPlot.area_sqft.toLocaleString('en-IN')} sq ft</div>
+                  <div className="text-sm text-slate-600">Dimensions</div>
+                  {selectedPlot.length_ft && selectedPlot.width_ft ? (
+                    <>
+                      <div className="font-bold text-slate-900">{selectedPlot.length_ft} × {selectedPlot.width_ft} ft</div>
+                      <div className="text-xs text-slate-600 mt-1">{selectedPlot.area_sqft.toLocaleString('en-IN')} sq ft</div>
+                    </>
+                  ) : (
+                    <div className="font-bold text-slate-900">{selectedPlot.area_sqft.toLocaleString('en-IN')} sq ft</div>
+                  )}
                 </div>
                 <div className="bg-slate-50 rounded-xl p-4 text-center">
                   <Shield className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
